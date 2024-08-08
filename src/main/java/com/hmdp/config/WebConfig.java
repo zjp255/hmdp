@@ -29,7 +29,7 @@ public class WebConfig implements WebMvcConfigurer {
                         "/shop/**",
                         "/shop-type/**",
                         "/upload/**",
-                        "voucher/**").order(1);
+                        "/voucher/**").order(1);
         registry.addInterceptor(new RefreshInterceptor(stringRedisTemplate)).addPathPatterns("/**").order(0);
     }
 }
