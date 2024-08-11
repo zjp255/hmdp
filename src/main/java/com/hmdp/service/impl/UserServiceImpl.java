@@ -12,16 +12,21 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
+import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.servlet.http.HttpSession;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -122,6 +127,58 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             return  Result.fail("用户不存在");
         }
         return Result.ok(BeanUtil.copyProperties(userById, UserDTO.class));
+    }
+
+    @Override
+    public Result userSign() {
+        //分别获得年月日
+        LocalDateTime now = LocalDateTime.now();
+        int year = now.getYear();
+        int month = now.getMonthValue();
+        int day = now.getDayOfMonth();
+        //获得用户信息
+        UserDTO user = UserHolder.getUser();
+        //和成key
+        String key = USER_SIGN_KEY + user.getId() + ":" + year + ":" + month;
+        Boolean isSuccess = stringRedisTemplate.opsForValue().setBit(key, day - 1, true);
+        if(Boolean.TRUE.equals(isSuccess))
+        {
+            return Result.fail("签到失败");
+        }
+        return Result.ok();
+    }
+
+    @Override
+    public Result userSignCount() {
+        //分别获得年月日
+        LocalDateTime now = LocalDateTime.now();
+        int year = now.getYear();
+        int month = now.getMonthValue();
+        int day = now.getDayOfMonth();
+        //获得用户信息
+        UserDTO user = UserHolder.getUser();
+        //和成key
+        String key = USER_SIGN_KEY + user.getId() + ":" + year + ":" + month;
+        //获得数据
+        List<Long> result = stringRedisTemplate.opsForValue().
+                bitField(key,
+                        BitFieldSubCommands.create().
+                                get(BitFieldSubCommands.BitFieldType.signed(day)).valueAt(0));
+        if(result == null || result.size() == 0)
+        {
+            return Result.ok(0);
+        }
+        //统计连续签到次数
+        Long num = result.get(0);
+        if(num == null || num == 0)
+            return Result.ok(0);
+        int count = 0;
+        while ((num & 1) == 1)
+        {
+            count++;
+            num = num >> 1;
+        }
+        return Result.ok(count);
     }
 
     private User createUserByPhone(String phone) {
